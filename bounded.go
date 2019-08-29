@@ -1,5 +1,3 @@
-// +build OMIT
-
 package main
 
 import (
@@ -17,11 +15,11 @@ import (
 func walkFiles(done <-chan struct{}, root string) (<-chan string, <-chan error) {
 	paths := make(chan string)
 	errc := make(chan error, 1)
-	go func() { // HL
+	go func() {
 		// Close the paths channel after Walk returns.
-		defer close(paths) // HL
+		defer close(paths)
 		// No select needed for this send, since errc is buffered.
-		errc <- filepath.Walk(root, func(path string, info os.FileInfo, err error) error { // HL
+		errc <- filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
@@ -29,8 +27,8 @@ func walkFiles(done <-chan struct{}, root string) (<-chan string, <-chan error) 
 				return nil
 			}
 			select {
-			case paths <- path: // HL
-			case <-done: // HL
+			case paths <- path:
+			case <-done:
 				return errors.New("walk canceled")
 			}
 			return nil
@@ -49,7 +47,7 @@ type result struct {
 // digester reads path names from paths and sends digests of the corresponding
 // files on c until either paths or done is closed.
 func digester(done <-chan struct{}, paths <-chan string, c chan<- result) {
-	for path := range paths { // HLpaths
+	for path := range paths {
 		sum, err := sumFile(path)
 		select {
 		case c <- result{path, sum, err}:
@@ -72,19 +70,19 @@ func MD5All(root string) (map[string][]byte, error) {
 	paths, errc := walkFiles(done, root)
 
 	// Start a fixed number of goroutines to read and digest files.
-	c := make(chan result) // HLc
+	c := make(chan result)
 	var wg sync.WaitGroup
 	const numDigesters = 20
 	wg.Add(numDigesters)
 	for i := 0; i < numDigesters; i++ {
 		go func() {
-			digester(done, paths, c) // HLc
+			digester(done, paths, c)
 			wg.Done()
 		}()
 	}
 	go func() {
 		wg.Wait()
-		close(c) // HLc
+		close(c)
 	}()
 	// End of pipeline. OMIT
 
@@ -96,7 +94,7 @@ func MD5All(root string) (map[string][]byte, error) {
 		m[r.path] = r.sum
 	}
 	// Check whether the Walk failed.
-	if err := <-errc; err != nil { // HLerrc
+	if err := <-errc; err != nil {
 		return nil, err
 	}
 	return m, nil

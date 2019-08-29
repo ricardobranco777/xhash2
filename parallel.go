@@ -1,5 +1,3 @@
-// +build OMIT
-
 package main
 
 import (
@@ -27,7 +25,7 @@ func sumFiles(done <-chan struct{}, root string) (<-chan result, <-chan error) {
 	// the result on c.  Send the result of the walk on errc.
 	c := make(chan result)
 	errc := make(chan error, 1)
-	go func() { // HL
+	go func() {
 		var wg sync.WaitGroup
 		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -37,17 +35,17 @@ func sumFiles(done <-chan struct{}, root string) (<-chan result, <-chan error) {
 				return nil
 			}
 			wg.Add(1)
-			go func() { // HL
+			go func() {
 				sum, err := sumFile(path)
 				select {
-				case c <- result{path, sum, err}: // HL
-				case <-done: // HL
+				case c <- result{path, sum, err}:
+				case <-done:
 				}
 				wg.Done()
 			}()
 			// Abort the walk if done is closed.
 			select {
-			case <-done: // HL
+			case <-done:
 				return errors.New("walk canceled")
 			default:
 				return nil
@@ -55,12 +53,12 @@ func sumFiles(done <-chan struct{}, root string) (<-chan result, <-chan error) {
 		})
 		// Walk has returned, so all calls to wg.Add are done.  Start a
 		// goroutine to close c once all the sends are done.
-		go func() { // HL
+		go func() {
 			wg.Wait()
-			close(c) // HL
+			close(c)
 		}()
 		// No select needed here, since errc is buffered.
-		errc <- err // HL
+		errc <- err
 	}()
 	return c, errc
 }
@@ -72,13 +70,13 @@ func sumFiles(done <-chan struct{}, root string) (<-chan result, <-chan error) {
 func MD5All(root string) (map[string][]byte, error) {
 	// MD5All closes the done channel when it returns; it may do so before
 	// receiving all the values from c and errc.
-	done := make(chan struct{}) // HLdone
-	defer close(done)           // HLdone
+	done := make(chan struct{})
+	defer close(done)
 
-	c, errc := sumFiles(done, root) // HLdone
+	c, errc := sumFiles(done, root)
 
 	m := make(map[string][]byte)
-	for r := range c { // HLrange
+	for r := range c {
 		if r.err != nil {
 			return nil, r.err
 		}

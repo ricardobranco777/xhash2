@@ -1,10 +1,10 @@
 
-BINS = bounded parallel serial
+BIN = bounded parallel serial
 
-all: $(BINS)
+all: $(BIN)
 
 % : %.go utils.go
 	go build $< utils.go
 
 clean:
-	rm $(BINS)
+	rm -f $(BIN)
