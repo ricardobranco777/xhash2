@@ -6,12 +6,27 @@ import (
 	"crypto/md5"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"sync"
 )
+
+func sumFile(path string) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	hash := md5.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return nil, err
+	}
+
+	return hash.Sum(nil), nil
+}
 
 // walkFiles starts a goroutine to walk the directory tree at root and send the
 // path of each regular file on the string channel.  It sends the result of the
@@ -44,7 +59,7 @@ func walkFiles(done <-chan struct{}, root string) (<-chan string, <-chan error) 
 // A result is the product of reading and summing a file using MD5.
 type result struct {
 	path string
-	sum  [md5.Size]byte
+	sum  []byte
 	err  error
 }
 
@@ -52,9 +67,9 @@ type result struct {
 // files on c until either paths or done is closed.
 func digester(done <-chan struct{}, paths <-chan string, c chan<- result) {
 	for path := range paths { // HLpaths
-		data, err := ioutil.ReadFile(path)
+		sum, err := sumFile(path)
 		select {
-		case c <- result{path, md5.Sum(data), err}:
+		case c <- result{path, sum, err}:
 		case <-done:
 			return
 		}
@@ -65,7 +80,7 @@ func digester(done <-chan struct{}, paths <-chan string, c chan<- result) {
 // from file path to the MD5 sum of the file's contents.  If the directory walk
 // fails or any read operation fails, MD5All returns an error.  In that case,
 // MD5All does not wait for inflight read operations to complete.
-func MD5All(root string) (map[string][md5.Size]byte, error) {
+func MD5All(root string) (map[string][]byte, error) {
 	// MD5All closes the done channel when it returns; it may do so before
 	// receiving all the values from c and errc.
 	done := make(chan struct{})
@@ -90,7 +105,7 @@ func MD5All(root string) (map[string][md5.Size]byte, error) {
 	}()
 	// End of pipeline. OMIT
 
-	m := make(map[string][md5.Size]byte)
+	m := make(map[string][]byte)
 	for r := range c {
 		if r.err != nil {
 			return nil, r.err
