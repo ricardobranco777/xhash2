@@ -62,7 +62,6 @@ func MD5All_bounded(root string) (map[string][]byte, error) {
 	// Start a fixed number of goroutines to read and digest files.
 	c := make(chan result)
 	var wg sync.WaitGroup
-	const numDigesters = 20
 	wg.Add(numDigesters)
 	for i := 0; i < numDigesters; i++ {
 		go func() {

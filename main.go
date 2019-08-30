@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 )
+
+var numDigesters = 20
 
 func usage() {
 	fmt.Fprintf(os.Stderr, "Usage: %s [-serial|-parallel|-bounded] DIRECTORY\n", os.Args[0])
@@ -27,6 +30,14 @@ func main() {
 	case "-parallel":
 		f = MD5All_parallel
 	case "-bounded":
+		if _, ok := os.LookupEnv("DIGESTERS"); ok {
+			var err error
+			numDigesters, err = strconv.Atoi(os.Getenv("DIGESTERS"))
+			if err != nil || numDigesters < 1 {
+				fmt.Fprintf(os.Stderr, "Invalid value for DIGESTERS\n")
+				os.Exit(1)
+			}
+		}
 		f = MD5All_bounded
 	default:
 		usage()
