@@ -1,10 +1,6 @@
 
-BIN = bounded parallel serial
-
-all: $(BIN)
-
-% : %.go utils.go
-	go build $< utils.go
+xhash2: *.go
+	go build
 
 clean:
-	rm -f $(BIN)
+	rm -f xhash2
