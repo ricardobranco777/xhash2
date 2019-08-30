@@ -1,35 +1,50 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 )
 
+var algorithm string
+var method string
 var numDigesters = 20
 
-func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: %s [-serial|-parallel|-bounded] DIRECTORY\n", os.Args[0])
-	os.Exit(1)
+func init() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [OPTIONS] DIRECTORY\n\n", os.Args[0])
+		flag.PrintDefaults()
+	}
+
+	for h := range algorithms {
+		flag.StringVar(&algorithm, strings.ToLower(h), "MD5", h+" algorithm")
+	}
+	for _, s := range []string{"serial", "bounded", "parallel"} {
+		flag.StringVar(&method, s, "", s)
+	}
 }
 
 func main() {
+	flag.Parse()
+
 	// Calculate the MD5 sum of all files under the specified directory,
 	// then print the results sorted by path name.
 
 	var f func(string) (map[string][]byte, error)
 
-	if len(os.Args) != 3 {
-		usage()
+	if len(flag.Args()) != 1 {
+		flag.PrintDefaults()
 	}
 
-	switch os.Args[1] {
-	case "-serial":
+	switch method {
+	case "serial":
 		f = MD5All_serial
-	case "-parallel":
+	case "parallel":
 		f = MD5All_parallel
-	case "-bounded":
+	case "bounded":
 		if _, ok := os.LookupEnv("DIGESTERS"); ok {
 			var err error
 			numDigesters, err = strconv.Atoi(os.Getenv("DIGESTERS"))
@@ -40,7 +55,7 @@ func main() {
 		}
 		f = MD5All_bounded
 	default:
-		usage()
+		panic("Invalid method")
 	}
 
 	m, err := f(os.Args[2])
