@@ -33,6 +33,17 @@ func sumFile(path string) ([]byte, error) {
 	return hash.Sum(nil), nil
 }
 
+func sumFilesFromArgs(s string, WalkFn filepath.WalkFunc) error {
+	for _, path := range os.Args[1:] {
+		// XXX: Use os.Lstat()
+		info, err := os.Stat(path)
+		if err := WalkFn(path, info, err); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func sumFilesFromFile(filename string, WalkFn filepath.WalkFunc) error {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -72,7 +83,8 @@ func sumFiles(done <-chan struct{}, root string) (<-chan result, <-chan error) {
 	go func() {
 		var wg sync.WaitGroup
 		// f := filepath.Walk
-		f := sumFilesFromFile
+		//f := sumFilesFromFile
+		f := sumFilesFromArgs
 		err := f(root, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
@@ -141,7 +153,7 @@ func usage() {
 func main() {
 	// Calculate the MD5 sum of all files under the specified directory
 
-	if len(os.Args) != 2 {
+	if len(os.Args) < 2 {
 		usage()
 	}
 
