@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/md5"
 	"errors"
 	"fmt"
@@ -32,6 +33,33 @@ func sumFile(path string) ([]byte, error) {
 	return hash.Sum(nil), nil
 }
 
+func sumFilesFromFile(filename string, WalkFn filepath.WalkFunc) error {
+	file, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	reader := bufio.NewReader(file)
+
+	for {
+		line, _, err := reader.ReadLine()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+		path := string(line)
+		// XXX: Use os.Lstat()
+		info, err := os.Stat(path)
+		if err := WalkFn(path, info, err); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // sumFiles starts goroutines to walk the directory tree at root and digest each
 // regular file.  These goroutines send the results of the digests on the result
 // channel and send the result of the walk on the error channel.  If done is
@@ -43,7 +71,9 @@ func sumFiles(done <-chan struct{}, root string) (<-chan result, <-chan error) {
 	errc := make(chan error, 1)
 	go func() {
 		var wg sync.WaitGroup
-		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		// f := filepath.Walk
+		f := sumFilesFromFile
+		err := f(root, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
