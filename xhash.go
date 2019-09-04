@@ -19,11 +19,13 @@ import (
 	"sync"
 )
 
-type hashes map[string]*struct {
+type info struct {
 	sum  []byte
 	hash crypto.Hash
 	hash.Hash
 }
+
+type hashes map[string]*info
 
 // A result is the product of reading and summing a file using MD5.
 type result struct {
@@ -36,19 +38,20 @@ var progname string
 
 var algorithms = map[string]*struct {
 	check bool
+	hash  crypto.Hash
 }{
-	"MD5":        {},
-	"SHA1":       {},
-	"SHA224":     {},
-	"SHA256":     {},
-	"SHA384":     {},
-	"SHA512":     {},
-	"SHA512-224": {},
-	"SHA512-256": {},
-	"SHA3-224":   {},
-	"SHA3-256":   {},
-	"SHA3-384":   {},
-	"SHA3-512":   {},
+	"MD5":        {hash: crypto.MD5},
+	"SHA1":       {hash: crypto.SHA1},
+	"SHA224":     {hash: crypto.SHA224},
+	"SHA256":     {hash: crypto.SHA256},
+	"SHA384":     {hash: crypto.SHA384},
+	"SHA512":     {hash: crypto.SHA512},
+	"SHA512-224": {hash: crypto.SHA512_224},
+	"SHA512-256": {hash: crypto.SHA512_256},
+	"SHA3-224":   {hash: crypto.SHA3_224},
+	"SHA3-256":   {hash: crypto.SHA3_256},
+	"SHA3-384":   {hash: crypto.SHA3_384},
+	"SHA3-512":   {hash: crypto.SHA3_512},
 }
 
 func sumFileF(f *os.File) (hashes, error) {
@@ -56,25 +59,17 @@ func sumFileF(f *os.File) (hashes, error) {
 	var writers []io.Writer
 	var pipeWriters []*io.PipeWriter
 
-	hashes := hashes{
-		"MD5":        {hash: crypto.MD5},
-		"SHA1":       {hash: crypto.SHA1},
-		"SHA224":     {hash: crypto.SHA224},
-		"SHA256":     {hash: crypto.SHA256},
-		"SHA384":     {hash: crypto.SHA384},
-		"SHA512":     {hash: crypto.SHA512},
-		"SHA512-224": {hash: crypto.SHA512_224},
-		"SHA512-256": {hash: crypto.SHA512_256},
-		"SHA3-224":   {hash: crypto.SHA3_224},
-		"SHA3-256":   {hash: crypto.SHA3_256},
-		"SHA3-384":   {hash: crypto.SHA3_384},
-		"SHA3-512":   {hash: crypto.SHA3_512},
-	}
+	hashes := make(hashes)
 
+	// Populate hashes
 	for algorithm, _ := range algorithms {
 		if !algorithms[algorithm].check {
 			continue
 		}
+		hashes[algorithm] = &info{hash: algorithms[algorithm].hash}
+	}
+
+	for algorithm, _ := range hashes {
 		pr, pw := io.Pipe()
 		writers = append(writers, pw)
 		pipeWriters = append(pipeWriters, pw)
@@ -226,10 +221,6 @@ func MD5All(root string) error {
 			return r.err
 		}
 		for algorithm, _ := range r.hashes {
-			// XXX
-			if r.hashes[algorithm].sum == nil {
-				continue
-			}
 			fmt.Printf("%s(%s) = %x\n", algorithm, r.path, r.hashes[algorithm].sum)
 		}
 	}
