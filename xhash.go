@@ -2,39 +2,127 @@ package main
 
 import (
 	"bufio"
-	"crypto/md5"
+	"crypto"
+	_ "crypto/md5"
+	_ "crypto/sha1"
+	_ "crypto/sha256"
+	_ "crypto/sha512"
 	"errors"
+	"flag"
 	"fmt"
+	_ "golang.org/x/crypto/sha3"
+	"hash"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
-// A result is the product of reading and summing a file using MD5.
-type result struct {
-	path string
+type hashes map[string]*struct {
 	sum  []byte
-	err  error
+	hash crypto.Hash
+	hash.Hash
 }
 
-func sumFile(path string) ([]byte, error) {
+// A result is the product of reading and summing a file using MD5.
+type result struct {
+	path   string
+	hashes hashes
+	err    error
+}
+
+var progname string
+
+var algorithms = map[string]*struct {
+	check bool
+}{
+	"MD5":        {},
+	"SHA1":       {},
+	"SHA224":     {},
+	"SHA256":     {},
+	"SHA384":     {},
+	"SHA512":     {},
+	"SHA512-224": {},
+	"SHA512-256": {},
+	"SHA3-224":   {},
+	"SHA3-256":   {},
+	"SHA3-384":   {},
+	"SHA3-512":   {},
+}
+
+func sumFileF(f *os.File) (hashes, error) {
+	var wg sync.WaitGroup
+	var writers []io.Writer
+	var pipeWriters []*io.PipeWriter
+
+	hashes := hashes{
+		"MD5":        {hash: crypto.MD5},
+		"SHA1":       {hash: crypto.SHA1},
+		"SHA224":     {hash: crypto.SHA224},
+		"SHA256":     {hash: crypto.SHA256},
+		"SHA384":     {hash: crypto.SHA384},
+		"SHA512":     {hash: crypto.SHA512},
+		"SHA512-224": {hash: crypto.SHA512_224},
+		"SHA512-256": {hash: crypto.SHA512_256},
+		"SHA3-224":   {hash: crypto.SHA3_224},
+		"SHA3-256":   {hash: crypto.SHA3_256},
+		"SHA3-384":   {hash: crypto.SHA3_384},
+		"SHA3-512":   {hash: crypto.SHA3_512},
+	}
+
+	for algorithm, _ := range algorithms {
+		if !algorithms[algorithm].check {
+			continue
+		}
+		pr, pw := io.Pipe()
+		writers = append(writers, pw)
+		pipeWriters = append(pipeWriters, pw)
+		wg.Add(1)
+		go func(algorithm string) {
+			defer wg.Done()
+			h := hashes[algorithm].hash.New()
+			if _, err := io.Copy(h, pr); err != nil {
+				panic(err)
+			}
+			hashes[algorithm].sum = h.Sum(nil)
+		}(algorithm)
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer func() {
+			for _, pw := range pipeWriters {
+				pw.Close()
+			}
+		}()
+
+		// build the multiwriter for all the pipes
+		mw := io.MultiWriter(writers...)
+
+		// copy the data into the multiwriter
+		if _, err := io.Copy(mw, f); err != nil {
+			panic(err)
+		}
+	}()
+
+	wg.Wait()
+	return hashes, nil
+}
+
+func sumFile(path string) (hashes, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	hash := md5.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return nil, err
-	}
-
-	return hash.Sum(nil), nil
+	return sumFileF(file)
 }
 
-func sumFilesFromArgs(s string, WalkFn filepath.WalkFunc) error {
-	for _, path := range os.Args[1:] {
+func sumFilesFromArgs(_unused string, WalkFn filepath.WalkFunc) error {
+	for _, path := range flag.Args() {
 		// XXX: Use os.Lstat()
 		info, err := os.Stat(path)
 		if err := WalkFn(path, info, err); err != nil {
@@ -94,9 +182,9 @@ func sumFiles(done <-chan struct{}, root string) (<-chan result, <-chan error) {
 			}
 			wg.Add(1)
 			go func() {
-				sum, err := sumFile(path)
+				sums, err := sumFile(path)
 				select {
-				case c <- result{path, sum, err}:
+				case c <- result{path, sums, err}:
 				case <-done:
 				}
 				wg.Done()
@@ -137,7 +225,13 @@ func MD5All(root string) error {
 		if r.err != nil {
 			return r.err
 		}
-		fmt.Printf("%x  %s\n", r.sum, r.path)
+		for algorithm, _ := range r.hashes {
+			// XXX
+			if r.hashes[algorithm].sum == nil {
+				continue
+			}
+			fmt.Printf("%s(%s) = %x\n", algorithm, r.path, r.hashes[algorithm].sum)
+		}
 	}
 	if err := <-errc; err != nil {
 		return err
@@ -150,14 +244,23 @@ func usage() {
 	os.Exit(1)
 }
 
-func main() {
-	// Calculate the MD5 sum of all files under the specified directory
+func init() {
+	progname = filepath.Base(os.Args[0])
 
-	if len(os.Args) < 2 {
-		usage()
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [OPTIONS] [-s STRING...]|[FILE... DIRECTORY...]\n\n", progname)
+		flag.PrintDefaults()
 	}
 
-	err := MD5All(os.Args[1])
+	for algorithm, _ := range algorithms {
+		flag.BoolVar(&algorithms[algorithm].check, strings.ToLower(algorithm), false, algorithm+" algorithm")
+	}
+}
+
+func main() {
+	flag.Parse()
+
+	err := MD5All(flag.Args()[0])
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
