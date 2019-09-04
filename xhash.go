@@ -13,6 +13,7 @@ import (
 	_ "golang.org/x/crypto/sha3"
 	"hash"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,6 +53,38 @@ var algorithms = map[crypto.Hash]*struct {
 	crypto.SHA3_256:   {name: "SHA3-256"},
 	crypto.SHA3_384:   {name: "SHA3-384"},
 	crypto.SHA3_512:   {name: "SHA3-512"},
+}
+
+func sumSmallFileF(f *os.File) (hashes, error) {
+	var wg sync.WaitGroup
+
+	data, err := ioutil.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+
+	hashes := make(hashes)
+
+	// Populate hashes
+	for algorithm, _ := range algorithms {
+		if !algorithms[algorithm].check {
+			continue
+		}
+		hashes[algorithm] = &info{hash: algorithm}
+	}
+
+	for algorithm, _ := range hashes {
+		wg.Add(1)
+		go func(algorithm crypto.Hash) {
+			defer wg.Done()
+			h := hashes[algorithm].hash.New()
+			h.Write(data)
+			hashes[algorithm].sum = h.Sum(nil)
+		}(algorithm)
+	}
+
+	wg.Wait()
+	return hashes, nil
 }
 
 func sumFileF(f *os.File) (hashes, error) {
@@ -106,14 +139,18 @@ func sumFileF(f *os.File) (hashes, error) {
 	return hashes, nil
 }
 
-func sumFile(path string) (hashes, error) {
+func sumFile(path string, info os.FileInfo) (hashes, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	return sumFileF(file)
+	if info.Size() < 1e6 {
+		return sumSmallFileF(file)
+	} else {
+		return sumFileF(file)
+	}
 }
 
 func sumFilesFromArgs(_unused string, WalkFn filepath.WalkFunc) error {
@@ -177,7 +214,7 @@ func sumFiles(done <-chan struct{}, root string) (<-chan result, <-chan error) {
 			}
 			wg.Add(1)
 			go func() {
-				sums, err := sumFile(path)
+				sums, err := sumFile(path, info)
 				select {
 				case c <- result{path, sums, err}:
 				case <-done:
