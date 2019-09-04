@@ -25,7 +25,7 @@ type info struct {
 	hash.Hash
 }
 
-type hashes map[string]*info
+type hashes map[crypto.Hash]*info
 
 // A result is the product of reading and summing a file using MD5.
 type result struct {
@@ -36,22 +36,22 @@ type result struct {
 
 var progname string
 
-var algorithms = map[string]*struct {
+var algorithms = map[crypto.Hash]*struct {
+	name  string
 	check bool
-	hash  crypto.Hash
 }{
-	"MD5":        {hash: crypto.MD5},
-	"SHA1":       {hash: crypto.SHA1},
-	"SHA224":     {hash: crypto.SHA224},
-	"SHA256":     {hash: crypto.SHA256},
-	"SHA384":     {hash: crypto.SHA384},
-	"SHA512":     {hash: crypto.SHA512},
-	"SHA512-224": {hash: crypto.SHA512_224},
-	"SHA512-256": {hash: crypto.SHA512_256},
-	"SHA3-224":   {hash: crypto.SHA3_224},
-	"SHA3-256":   {hash: crypto.SHA3_256},
-	"SHA3-384":   {hash: crypto.SHA3_384},
-	"SHA3-512":   {hash: crypto.SHA3_512},
+	crypto.MD5:        {name: "MD5"},
+	crypto.SHA1:       {name: "SHA1"},
+	crypto.SHA224:     {name: "SHA224"},
+	crypto.SHA256:     {name: "SHA256"},
+	crypto.SHA384:     {name: "SHA384"},
+	crypto.SHA512:     {name: "SHA512"},
+	crypto.SHA512_224: {name: "SHA512-224"},
+	crypto.SHA512_256: {name: "SHA512-256"},
+	crypto.SHA3_224:   {name: "SHA3-224"},
+	crypto.SHA3_256:   {name: "SHA3-256"},
+	crypto.SHA3_384:   {name: "SHA3-384"},
+	crypto.SHA3_512:   {name: "SHA3-512"},
 }
 
 func sumFileF(f *os.File) (hashes, error) {
@@ -66,7 +66,7 @@ func sumFileF(f *os.File) (hashes, error) {
 		if !algorithms[algorithm].check {
 			continue
 		}
-		hashes[algorithm] = &info{hash: algorithms[algorithm].hash}
+		hashes[algorithm] = &info{hash: algorithm}
 	}
 
 	for algorithm, _ := range hashes {
@@ -74,7 +74,7 @@ func sumFileF(f *os.File) (hashes, error) {
 		writers = append(writers, pw)
 		pipeWriters = append(pipeWriters, pw)
 		wg.Add(1)
-		go func(algorithm string) {
+		go func(algorithm crypto.Hash) {
 			defer wg.Done()
 			h := hashes[algorithm].hash.New()
 			if _, err := io.Copy(h, pr); err != nil {
@@ -221,7 +221,7 @@ func MD5All(root string) error {
 			return r.err
 		}
 		for algorithm, _ := range r.hashes {
-			fmt.Printf("%s(%s) = %x\n", algorithm, r.path, r.hashes[algorithm].sum)
+			fmt.Printf("%s(%s) = %x\n", algorithms[algorithm].name, r.path, r.hashes[algorithm].sum)
 		}
 	}
 	if err := <-errc; err != nil {
@@ -244,7 +244,7 @@ func init() {
 	}
 
 	for algorithm, _ := range algorithms {
-		flag.BoolVar(&algorithms[algorithm].check, strings.ToLower(algorithm), false, algorithm+" algorithm")
+		flag.BoolVar(&algorithms[algorithm].check, strings.ToLower(algorithms[algorithm].name), false, algorithms[algorithm].name+" algorithm")
 	}
 }
 
