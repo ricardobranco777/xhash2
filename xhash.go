@@ -55,6 +55,19 @@ var algorithms = map[crypto.Hash]*struct {
 	crypto.SHA3_512:   {name: "SHA3-512"},
 }
 
+func getHashes() hashes {
+	hashes := make(hashes)
+
+	for algorithm, _ := range algorithms {
+		if !algorithms[algorithm].check {
+			continue
+		}
+		hashes[algorithm] = &info{hash: algorithm}
+	}
+
+	return hashes
+}
+
 func sumSmallFileF(f *os.File) (hashes, error) {
 	var wg sync.WaitGroup
 
@@ -63,15 +76,7 @@ func sumSmallFileF(f *os.File) (hashes, error) {
 		return nil, err
 	}
 
-	hashes := make(hashes)
-
-	// Populate hashes
-	for algorithm, _ := range algorithms {
-		if !algorithms[algorithm].check {
-			continue
-		}
-		hashes[algorithm] = &info{hash: algorithm}
-	}
+	hashes := getHashes()
 
 	for algorithm, _ := range hashes {
 		wg.Add(1)
@@ -92,15 +97,7 @@ func sumFileF(f *os.File) (hashes, error) {
 	var writers []io.Writer
 	var pipeWriters []*io.PipeWriter
 
-	hashes := make(hashes)
-
-	// Populate hashes
-	for algorithm, _ := range algorithms {
-		if !algorithms[algorithm].check {
-			continue
-		}
-		hashes[algorithm] = &info{hash: algorithm}
-	}
+	hashes := getHashes()
 
 	for algorithm, _ := range hashes {
 		pr, pw := io.Pipe()
