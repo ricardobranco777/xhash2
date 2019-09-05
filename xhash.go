@@ -62,8 +62,8 @@ var algorithms = map[crypto.Hash]*struct {
 func getHashes() hashes {
 	hashes := make(hashes)
 
-	for algorithm, _ := range algorithms {
-		if !algorithms[algorithm].check {
+	for algorithm, h := range algorithms {
+		if !h.check {
 			continue
 		}
 		hashes[algorithm] = &info{hash: algorithm}
@@ -283,8 +283,8 @@ func init() {
 
 	flag.BoolVar(&opts.all, "all", false, "all algorithms (except others specified, if any)")
 
-	for algorithm, _ := range algorithms {
-		flag.BoolVar(&algorithms[algorithm].check, strings.ToLower(algorithms[algorithm].name), false, algorithms[algorithm].name+" algorithm")
+	for _, h := range algorithms {
+		flag.BoolVar(&h.check, strings.ToLower(h.name), false, h.name+" algorithm")
 	}
 }
 
