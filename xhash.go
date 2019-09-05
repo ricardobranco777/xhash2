@@ -37,6 +37,10 @@ type result struct {
 
 var progname string
 
+var opts struct {
+	all bool
+}
+
 var algorithms = map[crypto.Hash]*struct {
 	name  string
 	check bool
@@ -277,6 +281,8 @@ func init() {
 		flag.PrintDefaults()
 	}
 
+	flag.BoolVar(&opts.all, "all", false, "all algorithms (except others specified, if any)")
+
 	for algorithm, _ := range algorithms {
 		flag.BoolVar(&algorithms[algorithm].check, strings.ToLower(algorithms[algorithm].name), false, algorithms[algorithm].name+" algorithm")
 	}
@@ -284,6 +290,13 @@ func init() {
 
 func main() {
 	flag.Parse()
+
+	// TODO: Support default algorithm
+	if opts.all {
+		for _, h := range algorithms {
+			h.check = !h.check
+		}
+	}
 
 	err := MD5All(flag.Args()[0])
 	if err != nil {
