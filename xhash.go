@@ -13,7 +13,7 @@ import (
 	_ "golang.org/x/crypto/sha3"
 	"hash"
 	"io"
-	"io/ioutil"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,7 +75,7 @@ func getHashes() hashes {
 func sumSmallFileF(f *os.File) (hashes, error) {
 	var wg sync.WaitGroup
 
-	data, err := ioutil.ReadAll(f)
+	data, err := io.ReadAll(f)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,7 @@ func sumFileF(f *os.File) (hashes, error) {
 	return hashes, nil
 }
 
-func sumFile(path string, info os.FileInfo) (hashes, error) {
+func sumFile(path string, info fs.FileInfo) (hashes, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -203,10 +203,14 @@ func sumFiles(done <-chan struct{}, root string) (<-chan result, <-chan error) {
 	errc := make(chan error, 1)
 	go func() {
 		var wg sync.WaitGroup
-		// f := filepath.Walk
 		//f := sumFilesFromFile
-		f := sumFilesFromArgs
-		err := f(root, func(path string, info os.FileInfo, err error) error {
+		// f := sumFilesFromArgs
+		f := filepath.WalkDir
+		err := f(root, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			info, err := entry.Info()
 			if err != nil {
 				return err
 			}
