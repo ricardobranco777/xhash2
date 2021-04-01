@@ -82,7 +82,7 @@ func sumSmallFileF(f *os.File) (hashes, error) {
 
 	hashes := getHashes()
 
-	for algorithm, _ := range hashes {
+	for algorithm := range hashes {
 		wg.Add(1)
 		go func(algorithm crypto.Hash) {
 			defer wg.Done()
@@ -103,7 +103,7 @@ func sumFileF(f *os.File) (hashes, error) {
 
 	hashes := getHashes()
 
-	for algorithm, _ := range hashes {
+	for algorithm := range hashes {
 		pr, pw := io.Pipe()
 		writers = append(writers, pw)
 		pipeWriters = append(pipeWriters, pw)
